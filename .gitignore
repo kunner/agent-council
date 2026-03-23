@@ -11,3 +11,4 @@ packages/server/.env
 packages/web/.env.local
 packages/web/.env.production
 /workspace/
+.omc/

@@ -2,6 +2,7 @@ import { getFirestore } from '../firebase/admin.js'
 import type { AgentSet, CreateSetDto } from '@agent-council/shared'
 import { SET_COLORS } from '@agent-council/shared'
 import { FieldValue } from 'firebase-admin/firestore'
+import { createWorktree, removeWorktree } from '../git/git.service.js'
 
 export async function createSet(
   projectId: string,
@@ -20,9 +21,12 @@ export async function createSet(
 
   const branchName = `set-${setId.slice(0, 6)}/${dto.name.toLowerCase().replace(/\s+/g, '-')}`
 
+  const alias = dto.alias ?? dto.name.toLowerCase().replace(/\s+/g, '').replace(/팀$/, '')
+
   const agentSet = {
     projectId,
     name: dto.name,
+    alias,
     role: dto.role,
     status: 'idle' as const,
     color: colorEntry.hex,
@@ -33,6 +37,14 @@ export async function createSet(
   }
 
   await setRef.set(agentSet)
+
+  // Create git worktree for this set
+  try {
+    const worktreePath = createWorktree(projectId, setId, branchName)
+    await setRef.update({ worktreePath })
+  } catch (err) {
+    console.error(`[Git] Failed to create worktree for set ${setId}:`, err)
+  }
 
   const doc = await setRef.get()
   return { id: doc.id, ...doc.data() } as AgentSet
@@ -55,4 +67,17 @@ export async function updateSetStatus(
 ): Promise<void> {
   const db = getFirestore()
   await db.doc(`projects/${projectId}/sets/${setId}`).update({ status })
+}
+
+export async function deleteSet(projectId: string, setId: string): Promise<void> {
+  const db = getFirestore()
+
+  // Remove git worktree
+  try {
+    removeWorktree(projectId, setId)
+  } catch (err) {
+    console.error(`[Git] Failed to remove worktree for set ${setId}:`, err)
+  }
+
+  await db.doc(`projects/${projectId}/sets/${setId}`).delete()
 }

@@ -4,15 +4,24 @@ import { useMessages } from '../hooks/useMessages'
 import { useSets } from '../hooks/useSets'
 import { useApi } from '../hooks/useApi'
 import { MessageItem } from '../components/chat/MessageItem'
+import { MentionPopover } from '../components/chat/MentionPopover'
 import { SetStatusCard } from '../components/sets/SetStatusCard'
+import { SetCreateModal } from '../components/sets/SetCreateModal'
+import { useMention } from '../hooks/useMention'
+import { RightPanel } from '../components/panels/RightPanel'
+import { useProject } from '../hooks/useProject'
 
 export function CouncilRoomPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const { messages, loading } = useMessages(projectId)
   const { sets } = useSets(projectId)
+  const { project } = useProject(projectId)
   const { fetchApi } = useApi()
+  const { mention, handleInputChange, completeMention, closeMention } = useMention()
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [showSetModal, setShowSetModal] = useState(false)
+  const [showLeftPanel, setShowLeftPanel] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom
@@ -45,24 +54,60 @@ export function CouncilRoomPage() {
     }
   }
 
+  const handleCreateSet = async (data: { name: string; role: string; alias: string }) => {
+    await fetchApi(`/api/projects/${projectId}/sets`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  const handleDeleteSet = async (setId: string) => {
+    if (!confirm('이 팀을 삭제하시겠습니까?')) return
+    await fetchApi(`/api/projects/${projectId}/sets/${setId}`, {
+      method: 'DELETE',
+    })
+  }
+
   return (
     <div className="flex h-screen">
+      {showSetModal && (
+        <SetCreateModal
+          onClose={() => setShowSetModal(false)}
+          onSubmit={handleCreateSet}
+        />
+      )}
+
       {/* Left Panel - Sets */}
-      <div className="hidden w-64 flex-shrink-0 border-r border-gray-800 p-4 lg:block">
-        <Link to="/" className="text-lg font-bold hover:text-blue-400 transition">
-          ← Agent Council
-        </Link>
-        <div className="mt-6">
-          <h3 className="text-xs font-semibold uppercase text-gray-500">
-            Sets ({sets.length})
-          </h3>
-          <div className="mt-2 space-y-2">
-            {sets.map((set) => (
-              <SetStatusCard key={set.id} set={set} />
-            ))}
-            {sets.length === 0 && (
-              <p className="text-sm text-gray-500">Set을 추가해주세요</p>
-            )}
+      <div className={`${showLeftPanel ? 'fixed inset-0 z-40 block' : 'hidden'} lg:relative lg:block lg:w-64`}>
+        {/* Overlay for mobile */}
+        <div
+          className={`${showLeftPanel ? 'block' : 'hidden'} fixed inset-0 bg-black/50 lg:hidden`}
+          onClick={() => setShowLeftPanel(false)}
+        />
+        <div className="relative z-50 h-full w-64 flex-shrink-0 border-r border-gray-800 bg-gray-950 p-4">
+          <Link to="/" className="text-lg font-bold hover:text-blue-400 transition">
+            ← Agent Council
+          </Link>
+          <div className="mt-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase text-gray-500">
+                에이전트 팀 ({sets.length})
+              </h3>
+              <button
+                onClick={() => setShowSetModal(true)}
+                className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium hover:bg-blue-700 transition"
+              >
+                + 추가
+              </button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {sets.map((set) => (
+                <SetStatusCard key={set.id} set={set} onDelete={() => handleDeleteSet(set.id)} />
+              ))}
+              {sets.length === 0 && (
+                <p className="text-sm text-gray-500">팀을 추가해주세요</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -71,12 +116,21 @@ export function CouncilRoomPage() {
       <div className="flex flex-1 flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
-          <h2 className="font-semibold">Council Room</h2>
-          <span className="text-xs text-gray-500">{sets.length} sets</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowLeftPanel(!showLeftPanel)}
+              className="rounded p-1 hover:bg-gray-800 lg:hidden"
+            >
+              ☰
+            </button>
+            <Link to="/" className="text-sm text-gray-500 hover:text-blue-400 lg:hidden">←</Link>
+            <h2 className="font-semibold">Council Room</h2>
+          </div>
+          <span className="text-xs text-gray-500">{sets.length}개 팀</span>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-14 lg:pb-4">
           {loading ? (
             <p className="text-center text-gray-400">로딩 중...</p>
           ) : messages.length === 0 ? (
@@ -94,11 +148,25 @@ export function CouncilRoomPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-gray-800 p-4">
+        <div className="relative border-t border-gray-800 p-4">
+          {mention.active && (
+            <MentionPopover
+              sets={sets}
+              query={mention.query}
+              onSelect={(selected) => {
+                setInput(completeMention(input, selected))
+                closeMention()
+              }}
+              position={{ bottom: 60, left: 16 }}
+            />
+          )}
           <div className="flex gap-2">
             <textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value)
+                handleInputChange(e.target.value, e.target.selectionStart ?? 0)
+              }}
               onKeyDown={handleKeyDown}
               placeholder="메시지를 입력하세요... (Enter로 전송)"
               rows={1}
@@ -113,15 +181,55 @@ export function CouncilRoomPage() {
             </button>
           </div>
         </div>
+
+        {/* Bottom Status Bar - Desktop */}
+        <div className="hidden border-t border-gray-800 px-4 py-1.5 text-xs text-gray-500 lg:flex lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            {sets.filter((s) => s.status === 'working').map((s) => (
+              <span key={s.id} className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full" style={{ backgroundColor: s.color }} />
+                {s.name} 작업 중
+              </span>
+            ))}
+            {sets.every((s) => s.status !== 'working') && <span>대기 중</span>}
+          </div>
+          <div className="flex items-center gap-3">
+            <span>{messages.length}개 메시지</span>
+            <span>{sets.length}개 팀</span>
+          </div>
+        </div>
       </div>
 
-      {/* Right Panel - placeholder */}
-      <div className="hidden w-72 flex-shrink-0 border-l border-gray-800 p-4 xl:block">
-        <h3 className="text-xs font-semibold uppercase text-gray-500">Context</h3>
-        <p className="mt-4 text-sm text-gray-600">
-          Phase 2에서 태스크 보드, Git 상태가 표시됩니다.
-        </p>
+      {/* Mobile Bottom Tab Bar */}
+      <div className="fixed bottom-0 left-0 right-0 flex border-t border-gray-800 bg-gray-950 lg:hidden">
+        <button className="flex flex-1 flex-col items-center py-2 text-xs text-blue-400">
+          <span>💬</span>
+          <span>채팅</span>
+        </button>
+        <button
+          onClick={() => setShowSetModal(true)}
+          className="flex flex-1 flex-col items-center py-2 text-xs text-gray-400 hover:text-white"
+        >
+          <span>👥</span>
+          <span>팀</span>
+        </button>
+        <button className="flex flex-1 flex-col items-center py-2 text-xs text-gray-400">
+          <span>📋</span>
+          <span>보드</span>
+        </button>
+        <button className="flex flex-1 flex-col items-center py-2 text-xs text-gray-400">
+          <span>🔀</span>
+          <span>Git</span>
+        </button>
       </div>
+
+      {/* Right Panel */}
+      <RightPanel
+        project={project}
+        sets={sets}
+        messages={messages}
+        projectId={projectId ?? ''}
+      />
     </div>
   )
 }

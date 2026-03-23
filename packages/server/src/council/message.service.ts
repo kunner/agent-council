@@ -16,6 +16,11 @@ export async function createMessage(
     .collection(`projects/${projectId}/rooms/${roomId}/messages`)
     .doc()
 
+  // Strip undefined values — Firestore rejects them
+  const cleanMeta = metadata
+    ? Object.fromEntries(Object.entries(metadata).filter(([, v]) => v !== undefined))
+    : null
+
   const msg = {
     roomId,
     senderId,
@@ -23,7 +28,7 @@ export async function createMessage(
     senderType,
     content: dto.content,
     replyTo: dto.replyTo ?? null,
-    metadata: metadata ?? null,
+    metadata: Object.keys(cleanMeta ?? {}).length > 0 ? cleanMeta : null,
     timestamp: FieldValue.serverTimestamp(),
   }
 

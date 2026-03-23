@@ -1,6 +1,7 @@
 import { getFirestore } from '../firebase/admin.js'
 import type { Project, CreateProjectDto, Room } from '@agent-council/shared'
 import { FieldValue } from 'firebase-admin/firestore'
+import { initProjectRepo, cloneProjectRepo } from '../git/git.service.js'
 
 export async function createProject(
   ownerId: string,
@@ -35,6 +36,17 @@ export async function createProject(
   }
   await roomRef.set(room)
 
+  // Initialize Git repo based on project type
+  try {
+    if (dto.type === 'existing' && dto.repoUrl) {
+      cloneProjectRepo(projectRef.id, dto.repoUrl)
+    } else {
+      initProjectRepo(projectRef.id)
+    }
+  } catch (err) {
+    console.error('[Git] Failed to initialize repo:', err)
+  }
+
   const doc = await projectRef.get()
   return { id: doc.id, ...doc.data() } as Project
 }
@@ -58,7 +70,6 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
   const snapshot = await db
     .collection('projects')
     .where('ownerId', '==', ownerId)
-    .orderBy('createdAt', 'desc')
     .get()
 
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Project)

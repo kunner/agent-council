@@ -13,10 +13,12 @@ export async function callClaude(
   const args = [
     '-p', message,
     '--output-format', 'json',
+    '--permission-mode', 'bypassPermissions',
+    '--model', 'sonnet',
   ]
 
   if (systemPrompt) {
-    args.push('--system', systemPrompt)
+    args.push('--append-system-prompt', systemPrompt)
   }
 
   return new Promise((resolve, reject) => {

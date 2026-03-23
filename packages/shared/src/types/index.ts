@@ -85,6 +85,7 @@ export interface AgentSet {
   id: string
   projectId: string
   name: string
+  alias?: string
   role: string
   status: SetStatus
   color: string
@@ -169,6 +170,7 @@ export interface CreateProjectDto {
 
 export interface CreateSetDto {
   name: string
+  alias?: string
   role: string
   teammates?: number
 }
