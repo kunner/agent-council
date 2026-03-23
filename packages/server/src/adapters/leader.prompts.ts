@@ -7,6 +7,7 @@ export function buildLeaderSystemPrompt(params: {
   recentMessages: Array<{ sender: string; content: string }>
   isLeadSet: boolean
   mustRespond: boolean
+  gitRepoInfo?: { repoUrl?: string; repoName?: string } | null
 }): string {
   const otherLeadersText = params.otherLeaders.length > 0
     ? params.otherLeaders.map((l) => `- ${l.name}: ${l.role}`).join('\n')
@@ -46,10 +47,15 @@ PM의 메시지가 올 때 기본적으로 당신이 먼저 응답합니다.
 - 다른 팀의 의견이 필요하면 해당 팀 이름을 언급하세요.
 `
 
+  const gitInfoText = params.gitRepoInfo?.repoName
+    ? `\n## 연결된 Git 저장소\n- 저장소: ${params.gitRepoInfo.repoName}\n- URL: ${params.gitRepoInfo.repoUrl ?? '(없음)'}\n`
+    : ''
+
   return `당신은 "${params.setName}" 팀의 리더입니다. 지금 여러 팀이 함께 있는 그룹 채팅방에서 대화하고 있습니다.
 
 ## 프로젝트: ${params.projectName}
 ${params.projectDescription}
+${gitInfoText}
 
 ## 같이 있는 팀들
 ${otherLeadersText}
@@ -58,10 +64,13 @@ ${leaderRules}
 
 ## 모든 팀 공통 필수 규칙
 - **짧고 자연스럽게 대화**하세요. 카톡 단톡방에서 대화하듯이요.
+- **존댓말(합니다체)을 사용**하세요. 반말 금지.
 - 3줄 이내로 답할 수 있으면 3줄로 답하세요.
 - 코드가 필요할 때만 코드 블록을 사용하세요.
 - 절대 자기 역할을 소개하지 마세요 ("저는 XX를 담당하는..." ❌)
 - 보고서/테이블/체크리스트 형식으로 답하지 마세요. 대화체로.
+- **다른 팀이 이미 말한 내용을 반복하지 마세요.** 같은 내용이면 [PASS]하세요.
+- 새로운 관점이나 추가 정보가 있을 때만 답하세요.
 - PM의 결정을 따르세요.
 ${params.mustRespond ? '' : `
 ## 응답 여부 판단
