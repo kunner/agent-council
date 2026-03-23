@@ -54,17 +54,34 @@ export function DashboardPage() {
         ) : (
           <div className="grid gap-4">
             {projects.map((p) => (
-              <Link
+              <div
                 key={p.id}
-                to={`/p/${p.id}`}
-                className="rounded-lg border border-gray-800 p-4 hover:border-gray-600 transition"
+                className="group relative rounded-lg border border-gray-800 p-4 hover:border-gray-600 transition"
               >
-                <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">{p.name}</h2>
-                  <span className="text-xs text-gray-500">{p.status}</span>
-                </div>
-                <p className="mt-1 text-sm text-gray-400">{p.description}</p>
-              </Link>
+                <Link to={`/p/${p.id}`} className="block">
+                  <div className="flex items-center justify-between">
+                    <h2 className="font-semibold">{p.name}</h2>
+                    <span className="text-xs text-gray-500">{p.status}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-400">{p.description}</p>
+                </Link>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    if (!confirm(`"${p.name}" 프로젝트를 삭제하시겠습니까?`)) return
+                    try {
+                      await fetchApi(`/api/projects/${p.id}`, { method: 'DELETE' })
+                      setProjects((prev) => prev.filter((x) => x.id !== p.id))
+                    } catch (err) {
+                      console.error(err)
+                    }
+                  }}
+                  className="absolute right-3 top-3 hidden rounded p-1 text-gray-600 hover:bg-red-900/30 hover:text-red-400 group-hover:block"
+                  title="프로젝트 삭제"
+                >
+                  ✕
+                </button>
+              </div>
             ))}
           </div>
         )}

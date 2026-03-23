@@ -3,6 +3,7 @@ import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { NewProjectPage } from './pages/NewProjectPage'
 import { CouncilRoomPage } from './pages/CouncilRoomPage'
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage'
 import { useAuthStore } from './stores/authStore'
 
 export function App() {
@@ -31,6 +32,7 @@ export function App() {
       <Route path="/" element={<DashboardPage />} />
       <Route path="/new" element={<NewProjectPage />} />
       <Route path="/p/:projectId" element={<CouncilRoomPage />} />
+      <Route path="/p/:projectId/settings" element={<ProjectSettingsPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

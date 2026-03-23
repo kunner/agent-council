@@ -198,6 +198,7 @@ export class CouncilOrchestrator {
         projectDescription: project.description,
         otherLeaders: allSets.filter((s) => s.id !== set.id).map((s) => ({ name: s.name, role: s.role })),
         recentMessages,
+        isLeadSet: allSets.length > 0 && allSets[0]!.id === set.id,
       })
 
       const response = await callClaude(message, systemPrompt, set.worktreePath || undefined)
@@ -255,6 +256,7 @@ export class CouncilOrchestrator {
           projectDescription: project.description,
           otherLeaders: allSets.filter((s) => s.id !== set.id).map((s) => ({ name: s.name, role: s.role })),
           recentMessages,
+          isLeadSet: allSets.length > 0 && allSets[0]!.id === set.id,
         })
 
         const response = await callClaude(message, systemPrompt, set.worktreePath || undefined)

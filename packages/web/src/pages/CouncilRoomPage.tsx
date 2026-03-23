@@ -126,7 +126,12 @@ export function CouncilRoomPage() {
             <Link to="/" className="text-sm text-gray-500 hover:text-blue-400 lg:hidden">←</Link>
             <h2 className="font-semibold">Council Room</h2>
           </div>
-          <span className="text-xs text-gray-500">{sets.length}개 팀</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">{sets.length}개 팀</span>
+            <Link to={`/p/${projectId}/settings`} className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white transition" title="프로젝트 설정">
+              ⚙
+            </Link>
+          </div>
         </div>
 
         {/* Messages */}
@@ -142,6 +147,25 @@ export function CouncilRoomPage() {
               {messages.map((msg) => (
                 <MessageItem key={msg.id} message={msg} />
               ))}
+              {/* Typing/Working Indicator */}
+              {sets.filter((s) => s.status === 'working').length > 0 && (
+                <div className="flex items-center gap-2 px-2 py-1">
+                  <div className="flex gap-1">
+                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
+                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
+                    <span className="inline-block h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
+                  </div>
+                  <span className="text-xs text-gray-500">
+                    {sets
+                      .filter((s) => s.status === 'working')
+                      .map((s) => s.name)
+                      .join(', ')}
+                    {sets.filter((s) => s.status === 'working').length === 1
+                      ? '이 응답 중...'
+                      : '이 응답 중...'}
+                  </span>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
           )}

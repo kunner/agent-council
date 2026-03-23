@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { authMiddleware, type AuthRequest } from '../middleware/auth.js'
-import { createProject, getProject, listProjects } from './project.service.js'
+import { createProject, getProject, listProjects, updateProject, deleteProject } from './project.service.js'
 
 export const projectRouter: Router = Router()
 
@@ -41,6 +41,35 @@ projectRouter.post('/', async (req: AuthRequest, res, next) => {
     }
     const project = await createProject(req.uid!, { name, description, type, repoUrl })
     res.status(201).json({ project })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Update project
+projectRouter.patch('/:projectId', async (req: AuthRequest, res, next) => {
+  try {
+    const { name, description, status } = req.body
+    const project = await updateProject(req.params.projectId as string, req.uid!, { name, description, status })
+    if (!project) {
+      res.status(404).json({ error: 'Project not found' })
+      return
+    }
+    res.json({ project })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// Delete project
+projectRouter.delete('/:projectId', async (req: AuthRequest, res, next) => {
+  try {
+    const ok = await deleteProject(req.params.projectId as string, req.uid!)
+    if (!ok) {
+      res.status(404).json({ error: 'Project not found' })
+      return
+    }
+    res.json({ success: true })
   } catch (err) {
     next(err)
   }
