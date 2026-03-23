@@ -171,83 +171,104 @@ export function ProjectSettingsPage() {
         <h2 className="text-lg font-semibold">Git 저장소</h2>
         <p className="mt-1 text-sm text-gray-400">프로젝트의 Git 저장소를 관리합니다.</p>
 
-        {/* 현재 Git 상태 */}
         {gitStatus && gitStatus.mainCommits > 0 ? (
-          <div className="mt-4 rounded-lg border border-green-900/50 bg-green-900/10 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-green-400">
-              <span>✓</span> Git 저장소 연결됨
-            </div>
-            <div className="mt-2 space-y-1 text-xs text-gray-400">
-              <div className="flex justify-between">
-                <span>커밋 수</span>
-                <span>{gitStatus.mainCommits}개</span>
-              </div>
-              <div className="flex justify-between">
-                <span>브랜치</span>
-                <span>{gitStatus.branches.length}개</span>
-              </div>
-              {gitStatus.branches.map((b) => (
-                <div key={b.name} className="flex items-center gap-1 pl-2">
-                  <span className="text-green-500">●</span>
-                  <span>{b.name}</span>
+          <>
+            {/* 연결된 상태 */}
+            <div className="mt-4 rounded-lg border border-green-900/50 bg-green-900/10 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-medium text-green-400">
+                  <span>✓</span> Git 저장소 연결됨
                 </div>
-              ))}
+                <button
+                  onClick={() => setGitStatus(null)}
+                  className="text-xs text-gray-500 hover:text-yellow-400 transition"
+                >
+                  다른 저장소로 변경
+                </button>
+              </div>
+              <div className="mt-3 space-y-1.5 text-sm text-gray-300">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">커밋</span>
+                  <span>{gitStatus.mainCommits}개</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">브랜치</span>
+                  <span>{gitStatus.branches.length}개</span>
+                </div>
+              </div>
+              {gitStatus.branches.length > 0 && (
+                <div className="mt-3 space-y-1 border-t border-green-900/30 pt-3">
+                  {gitStatus.branches.map((b) => (
+                    <div key={b.name} className="flex items-center gap-2 text-xs text-gray-400">
+                      <span className="text-green-500">●</span>
+                      <span>{b.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
+            <button
+              onClick={loadGitStatus}
+              className="mt-2 text-xs text-gray-500 hover:text-blue-400 transition"
+            >
+              새로고침
+            </button>
+          </>
         ) : (
-          <div className="mt-4 rounded-lg border border-yellow-900/50 bg-yellow-900/10 p-4">
-            <div className="flex items-center gap-2 text-sm text-yellow-400">
-              <span>⚠</span> Git 저장소가 연결되지 않았습니다
+          <>
+            {/* 미연결 상태 — 연결 폼 표시 */}
+            <div className="mt-4 rounded-lg border border-yellow-900/50 bg-yellow-900/10 p-3">
+              <div className="flex items-center gap-2 text-sm text-yellow-400">
+                <span>⚠</span> Git 저장소가 연결되지 않았습니다
+              </div>
             </div>
-          </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400">기존 저장소 연결</label>
+                <input
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/user/repo.git"
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400">
+                  GitHub 토큰 <span className="text-gray-600">(프라이빗 저장소용, 선택)</span>
+                </label>
+                <input
+                  value={gitToken}
+                  onChange={(e) => setGitToken(e.target.value)}
+                  type="password"
+                  placeholder="ghp_xxxxxxxxxxxx"
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                />
+                <p className="mt-1 text-xs text-gray-600">GitHub → Settings → Developer settings → Personal access tokens</p>
+              </div>
+              <button
+                onClick={handleCloneGit}
+                disabled={!repoUrl.trim()}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
+              >
+                저장소 연결 (Clone)
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-gray-800" />
+                <span className="text-xs text-gray-600">또는</span>
+                <div className="h-px flex-1 bg-gray-800" />
+              </div>
+
+              <button
+                onClick={handleInitGit}
+                className="w-full rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-blue-500 hover:text-blue-400 transition"
+              >
+                빈 Git 저장소 새로 만들기
+              </button>
+            </div>
+          </>
         )}
-
-        <div className="mt-4 space-y-4">
-          {/* 기존 repo 연결 */}
-          <div>
-            <label className="block text-sm text-gray-400">기존 저장소 연결</label>
-            <input
-              value={repoUrl}
-              onChange={(e) => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/user/repo.git"
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400">
-              GitHub 토큰 <span className="text-gray-600">(프라이빗 저장소용, 선택)</span>
-            </label>
-            <input
-              value={gitToken}
-              onChange={(e) => setGitToken(e.target.value)}
-              type="password"
-              placeholder="ghp_xxxxxxxxxxxx"
-              className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-gray-600">GitHub → Settings → Developer settings → Personal access tokens</p>
-          </div>
-          <button
-            onClick={handleCloneGit}
-            disabled={!repoUrl.trim()}
-            className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-          >
-            저장소 연결 (Clone)
-          </button>
-
-          {/* 또는 빈 repo 생성 */}
-          <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-800" />
-            <span className="text-xs text-gray-600">또는</span>
-            <div className="h-px flex-1 bg-gray-800" />
-          </div>
-
-          <button
-            onClick={handleInitGit}
-            className="w-full rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-blue-500 hover:text-blue-400 transition"
-          >
-            빈 Git 저장소 새로 만들기
-          </button>
-        </div>
       </div>
 
       {/* 위험 구역 */}
