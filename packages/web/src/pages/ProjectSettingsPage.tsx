@@ -15,7 +15,11 @@ export function ProjectSettingsPage() {
   const [status, setStatus] = useState<ProjectStatus>('planning')
   const [repoUrl, setRepoUrl] = useState('')
   const [gitToken, setGitToken] = useState('')
-  const [gitStatus, setGitStatus] = useState<{ branches: Array<{ name: string }>; mainCommits: number } | null>(null)
+  const [gitStatus, setGitStatus] = useState<{
+    branches: Array<{ name: string }>
+    mainCommits: number
+    config?: { type: string; repoUrl?: string; repoName?: string; isPrivate?: boolean; connectedAt?: string } | null
+  } | null>(null)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -96,6 +100,21 @@ export function ProjectSettingsPage() {
     }
   }
 
+  const handleDisconnectGit = async () => {
+    if (!confirm('Git 저장소 연결을 해제하시겠습니까? 로컬 복사본이 삭제됩니다.')) return
+    try {
+      await fetchApi(`/api/projects/${projectId}/git`, { method: 'DELETE' })
+      setGitStatus(null)
+      setMessage('Git 저장소 연결이 해제되었습니다.')
+      setTimeout(() => setMessage(''), 3000)
+    } catch (err) {
+      setMessage('해제 실패: ' + (err as Error).message)
+    }
+  }
+
+  const gitConnected = gitStatus && gitStatus.mainCommits > 0
+  const gitConfig = gitStatus?.config
+
   if (!project) {
     return <div className="flex h-screen items-center justify-center text-gray-400">로딩 중...</div>
   }
@@ -171,7 +190,7 @@ export function ProjectSettingsPage() {
         <h2 className="text-lg font-semibold">Git 저장소</h2>
         <p className="mt-1 text-sm text-gray-400">프로젝트의 Git 저장소를 관리합니다.</p>
 
-        {gitStatus && gitStatus.mainCommits > 0 ? (
+        {gitConnected ? (
           <>
             {/* 연결된 상태 */}
             <div className="mt-4 rounded-lg border border-green-900/50 bg-green-900/10 p-4">
@@ -179,26 +198,47 @@ export function ProjectSettingsPage() {
                 <div className="flex items-center gap-2 text-sm font-medium text-green-400">
                   <span>✓</span> Git 저장소 연결됨
                 </div>
-                <button
-                  onClick={() => setGitStatus(null)}
-                  className="text-xs text-gray-500 hover:text-yellow-400 transition"
-                >
-                  다른 저장소로 변경
-                </button>
+                <div className="flex items-center gap-2">
+                  {gitConfig?.isPrivate && (
+                    <span className="rounded bg-yellow-900/30 px-1.5 py-0.5 text-xs text-yellow-400">Private</span>
+                  )}
+                  {gitConfig?.type === 'remote' && (
+                    <span className="rounded bg-blue-900/30 px-1.5 py-0.5 text-xs text-blue-400">Remote</span>
+                  )}
+                  {gitConfig?.type === 'local' && (
+                    <span className="rounded bg-gray-800 px-1.5 py-0.5 text-xs text-gray-400">Local</span>
+                  )}
+                </div>
               </div>
-              <div className="mt-3 space-y-1.5 text-sm text-gray-300">
+
+              <div className="mt-3 space-y-2 text-sm">
+                {gitConfig?.repoName && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">저장소</span>
+                    <span className="font-medium text-gray-200">{gitConfig.repoName}</span>
+                  </div>
+                )}
+                {gitConfig?.repoUrl && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">URL</span>
+                    <a href={gitConfig.repoUrl} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-xs truncate max-w-[250px]">
+                      {gitConfig.repoUrl}
+                    </a>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">커밋</span>
-                  <span>{gitStatus.mainCommits}개</span>
+                  <span className="text-gray-300">{gitStatus!.mainCommits}개</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">브랜치</span>
-                  <span>{gitStatus.branches.length}개</span>
+                  <span className="text-gray-300">{gitStatus!.branches.length}개</span>
                 </div>
               </div>
-              {gitStatus.branches.length > 0 && (
+
+              {gitStatus!.branches.length > 0 && (
                 <div className="mt-3 space-y-1 border-t border-green-900/30 pt-3">
-                  {gitStatus.branches.map((b) => (
+                  {gitStatus!.branches.map((b) => (
                     <div key={b.name} className="flex items-center gap-2 text-xs text-gray-400">
                       <span className="text-green-500">●</span>
                       <span>{b.name}</span>
@@ -206,13 +246,22 @@ export function ProjectSettingsPage() {
                   ))}
                 </div>
               )}
+
+              {gitConfig?.connectedAt && (
+                <div className="mt-3 border-t border-green-900/30 pt-2 text-xs text-gray-600">
+                  연결일: {new Date(gitConfig.connectedAt).toLocaleDateString('ko-KR')}
+                </div>
+              )}
             </div>
-            <button
-              onClick={loadGitStatus}
-              className="mt-2 text-xs text-gray-500 hover:text-blue-400 transition"
-            >
-              새로고침
-            </button>
+
+            <div className="mt-3 flex gap-3">
+              <button onClick={loadGitStatus} className="text-xs text-gray-500 hover:text-blue-400 transition">
+                새로고침
+              </button>
+              <button onClick={handleDisconnectGit} className="text-xs text-gray-500 hover:text-red-400 transition">
+                연결 해제
+              </button>
+            </div>
           </>
         ) : (
           <>

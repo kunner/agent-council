@@ -89,6 +89,16 @@ export function removeWorktree(projectId: string, setId: string): void {
 }
 
 /**
+ * Remove project repo entirely
+ */
+export function removeProjectRepo(projectId: string): void {
+  const projectPath = path.join(WORKSPACE_BASE, projectId)
+  if (fs.existsSync(projectPath)) {
+    fs.rmSync(projectPath, { recursive: true, force: true })
+  }
+}
+
+/**
  * Get git status for a project
  */
 export function getGitStatus(projectId: string): {
