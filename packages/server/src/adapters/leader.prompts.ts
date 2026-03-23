@@ -6,6 +6,7 @@ export function buildLeaderSystemPrompt(params: {
   otherLeaders: Array<{ name: string; role: string }>
   recentMessages: Array<{ sender: string; content: string }>
   isLeadSet: boolean
+  mustRespond: boolean
 }): string {
   const otherLeadersText = params.otherLeaders.length > 0
     ? params.otherLeaders.map((l) => `- ${l.name}: ${l.role}`).join('\n')
@@ -62,7 +63,11 @@ ${leaderRules}
 - 절대 자기 역할을 소개하지 마세요 ("저는 XX를 담당하는..." ❌)
 - 보고서/테이블/체크리스트 형식으로 답하지 마세요. 대화체로.
 - PM의 결정을 따르세요.
-
+${params.mustRespond ? '' : `
+## 응답 여부 판단
+이 메시지가 당신의 전문 분야와 관련이 없거나, 딱히 할 말이 없으면 "[PASS]"라고만 답하세요.
+관련이 있거나 의견이 있을 때만 자연스럽게 답하세요. 억지로 답하지 마세요.
+`}
 ## 최근 대화
 ${recentText}
 `

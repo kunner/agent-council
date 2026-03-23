@@ -20,32 +20,31 @@ interface ActiveTask {
   abortController: AbortController
 }
 
+const PASS_MARKERS = ['[PASS]', '[패스]', '[pass]']
+
 export class CouncilOrchestrator {
   private activeTasks = new Map<string, ActiveTask>()
 
   /**
-   * PM 메시지를 분석하여 적절한 응답 전략을 실행
+   * 회의체 방식 오케스트레이션
    *
-   * 전략:
-   * - @all → 모든 팀 병렬 응답
-   * - @팀이름 → 해당 팀만 응답
-   * - 일반 메시지 → 팀장(첫 번째 Set)만 응답
-   * - 리더 응답에서 다른 팀 멘션 → 후속 라운드
+   * PM 메시지가 오면:
+   * 1. @멘션이 있으면 해당 팀만 응답
+   * 2. @all이면 모든 팀 병렬 응답
+   * 3. 일반 메시지 → 모든 팀이 보고, 관련 있으면 자발 응답 (PASS 가능)
+   * 4. 응답한 팀의 메시지에서 다른 팀 멘션 → 후속 대화
    */
   async handleHumanMessage(
     projectId: string,
     roomId: string,
     humanMessage: string,
   ): Promise<void> {
-    // Interrupt: 이전 작업이 있으면 취소
+    // Interrupt: 이전 작업 취소
     const taskKey = `${projectId}:${roomId}`
     const existing = this.activeTasks.get(taskKey)
     if (existing) {
       existing.abortController.abort()
       this.activeTasks.delete(taskKey)
-      await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-        content: '⏹ 이전 응답을 중단하고 새 메시지를 처리합니다.',
-      })
     }
 
     const abortController = new AbortController()
@@ -60,86 +59,47 @@ export class CouncilOrchestrator {
         return
       }
 
-      // 메시지 분석: 멘션 파싱
-      const targetSets = this.parseMentions(humanMessage, sets)
-
-      // Get project info
       const db = getFirestore()
       const projectDoc = await db.collection('projects').doc(projectId).get()
       const project = projectDoc.data() as Project
 
-      // Get recent messages for context
       const recentMessages = await listMessages(projectId, roomId, 30)
       const recentForPrompt = recentMessages.map((m) => ({
         sender: m.senderName,
         content: m.content,
       }))
 
-      // Round 1: 대상 팀에게 응답 요청
-      let responses: Array<{ set: AgentSet; content: string }>
+      // 명시적 멘션 파싱
+      const explicitMentions = this.parseMentions(humanMessage, sets)
+      const isExplicit = explicitMentions !== null
 
-      if (targetSets.length === 1) {
-        // 단일 팀: 직접 응답
-        responses = await this.askSingleLeader(
-          targetSets[0]!, projectId, roomId, humanMessage,
-          project, sets, recentForPrompt, abortController.signal,
-        )
-      } else {
-        // 다수 팀: 병렬 응답
-        responses = await this.askLeadersParallel(
-          targetSets, projectId, roomId, humanMessage,
-          project, sets, recentForPrompt, abortController.signal,
-        )
-      }
+      // Round 1: 모든 팀에게 메시지 전달 (병렬)
+      const targetSets = isExplicit ? explicitMentions : sets
+      const responses = await this.askAllTeams(
+        targetSets, projectId, roomId, humanMessage,
+        project, sets, recentForPrompt, abortController.signal,
+        isExplicit, // 명시적 멘션이면 반드시 응답, 아니면 자발적
+      )
 
       if (abortController.signal.aborted) return
 
-      // Round 2: 후속 라운드 — 리더 응답에서 다른 팀 멘션 감지 + 구체적 지시사항 추출
-      const mentionedWithTasks = this.detectMentionsWithTasks(responses, sets, targetSets)
-      if (mentionedWithTasks.length > 0 && !abortController.signal.aborted) {
-        // 최신 컨텍스트로 갱신
+      // Round 2: 응답 중 다른 팀 멘션이 있으면 자연스러운 후속 대화
+      const respondedIds = new Set(responses.map((r) => r.set.id))
+      const mentionedInResponses = this.findMentionedTeams(responses, sets, respondedIds)
+
+      if (mentionedInResponses.length > 0 && !abortController.signal.aborted) {
         const updatedMessages = await listMessages(projectId, roomId, 30)
         const updatedForPrompt = updatedMessages.map((m) => ({
           sender: m.senderName,
           content: m.content,
         }))
 
-        await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-          content: `💬 ${mentionedWithTasks.map((m) => m.set.name).join(', ')}에게 작업이 배분되었습니다.`,
-        })
-
-        // 각 팀에게 개별적으로 구체적 지시사항을 전달
-        const round2Responses = await Promise.all(
-          mentionedWithTasks.map((m) =>
-            this.askSingleLeader(
-              m.set, projectId, roomId,
-              `팀장이 당신에게 다음 작업을 지시했습니다:\n\n${m.task}\n\n위 지시사항에만 집중해서 구체적으로 답변해주세요. 다른 팀의 업무에 대해서는 언급하지 마세요.`,
-              project, sets, updatedForPrompt, abortController.signal,
-            ),
-          ),
+        await this.askAllTeams(
+          mentionedInResponses, projectId, roomId,
+          '대화에서 당신의 팀이 언급되었습니다.',
+          project, sets, updatedForPrompt, abortController.signal,
+          true, // 멘션됐으니 반드시 응답
         )
-
-        if (abortController.signal.aborted) return
-
-        // Round 3: 팀장이 팀원 답변을 검토/정리 (실제 작업 결과가 있을 때만)
-        const round2Flat = round2Responses.flat()
-        const hasSubstantiveWork = round2Flat.some((r) =>
-          r.content.length > 100 // 실질적인 내용이 있는 답변만
-        )
-        const leadSet = sets[0]
-        if (leadSet && hasSubstantiveWork && !abortController.signal.aborted) {
-          const round3Messages = await listMessages(projectId, roomId, 30)
-          const round3ForPrompt = round3Messages.map((m) => ({
-            sender: m.senderName,
-            content: m.content,
-          }))
-
-          await this.askSingleLeader(
-            leadSet, projectId, roomId,
-            `각 팀이 답변했습니다. 팀장으로서 짧게 정리해주세요. 보고서 형식이 아니라 자연스러운 대화체로, 핵심만 요약하고 PM에게 다음 단계를 제안하세요.`,
-            project, sets, round3ForPrompt, abortController.signal,
-          )
-        }
       }
     } finally {
       this.activeTasks.delete(taskKey)
@@ -148,18 +108,17 @@ export class CouncilOrchestrator {
 
   /**
    * 멘션 파싱
-   * @all → 모든 팀
-   * @팀이름 → 해당 팀
-   * 없음 → 첫 번째 팀 (팀장)
+   * @all → 전체 (명시적)
+   * @팀이름 → 해당 팀들 (명시적)
+   * 없음 → null (자발적 판단 모드)
    */
-  private parseMentions(message: string, sets: AgentSet[]): AgentSet[] {
+  private parseMentions(message: string, sets: AgentSet[]): AgentSet[] | null {
     if (message.includes('@all') || message.includes('@전체')) {
       return sets
     }
 
     const mentioned: AgentSet[] = []
     for (const set of sets) {
-      // @백엔드팀 또는 @백엔드 형태 지원
       const nameWithoutSuffix = set.name.replace(/팀$/, '')
       if (
         message.includes(`@${set.name}`) ||
@@ -170,117 +129,39 @@ export class CouncilOrchestrator {
       }
     }
 
-    if (mentioned.length > 0) return mentioned
-
-    // 멘션 없으면 → 팀장 (첫 번째 Set)
-    return [sets[0]!]
+    return mentioned.length > 0 ? mentioned : null // null = 멘션 없음
   }
 
   /**
-   * 리더 응답에서 다른 팀 멘션 감지 + 해당 팀에 대한 구체적 지시사항 추출
+   * 응답에서 멘션된 다른 팀 찾기
    */
-  private detectMentionsWithTasks(
+  private findMentionedTeams(
     responses: Array<{ set: AgentSet; content: string }>,
     allSets: AgentSet[],
-    alreadyResponded: AgentSet[],
-  ): Array<{ set: AgentSet; task: string }> {
-    const respondedIds = new Set(alreadyResponded.map((s) => s.id))
-    const results = new Map<string, { set: AgentSet; task: string }>()
+    alreadyRespondedIds: Set<string>,
+  ): AgentSet[] {
+    const mentioned = new Set<string>()
 
     for (const { content } of responses) {
-      const lines = content.split('\n')
-
       for (const set of allSets) {
-        if (respondedIds.has(set.id)) continue
-        if (results.has(set.id)) continue
-
+        if (alreadyRespondedIds.has(set.id)) continue
         const nameWithoutSuffix = set.name.replace(/팀$/, '')
-        const mentionPatterns = [set.name, nameWithoutSuffix]
-        if (set.alias) mentionPatterns.push(set.alias)
-
-        // Find the line(s) where this team is mentioned to extract the specific task
-        const taskLines: string[] = []
-        for (const line of lines) {
-          if (mentionPatterns.some((p) => line.includes(p))) {
-            // Extract the task part after the team name mention
-            let taskText = line
-            for (const p of mentionPatterns) {
-              const idx = taskText.indexOf(p)
-              if (idx !== -1) {
-                taskText = taskText.slice(idx + p.length)
-                break
-              }
-            }
-            // Clean up: remove leading punctuation, commas, etc.
-            taskText = taskText.replace(/^[\s,.:·\-→]+/, '').trim()
-            if (taskText) taskLines.push(taskText)
-          }
-        }
-
-        if (taskLines.length > 0) {
-          results.set(set.id, { set, task: taskLines.join('\n') })
+        const patterns = [set.name, nameWithoutSuffix]
+        if (set.alias) patterns.push(set.alias)
+        if (patterns.some((p) => content.includes(p))) {
+          mentioned.add(set.id)
         }
       }
     }
 
-    return Array.from(results.values())
+    return allSets.filter((s) => mentioned.has(s.id))
   }
 
   /**
-   * 단일 리더에게 응답 요청
+   * 모든 대상 팀에게 병렬로 메시지 전달
+   * mustRespond=false면 팀이 [PASS]로 응답할 수 있음 (자발적 참여)
    */
-  private async askSingleLeader(
-    set: AgentSet,
-    projectId: string,
-    roomId: string,
-    message: string,
-    project: Project,
-    allSets: AgentSet[],
-    recentMessages: Array<{ sender: string; content: string }>,
-    signal: AbortSignal,
-  ): Promise<Array<{ set: AgentSet; content: string }>> {
-    if (signal.aborted) return []
-
-    try {
-      await updateSetStatus(projectId, set.id, 'working')
-
-      const systemPrompt = buildLeaderSystemPrompt({
-        setName: set.name,
-        role: set.role,
-        projectName: project.name,
-        projectDescription: project.description,
-        otherLeaders: allSets.filter((s) => s.id !== set.id).map((s) => ({ name: s.name, role: s.role })),
-        recentMessages,
-        isLeadSet: allSets.length > 0 && allSets[0]!.id === set.id,
-      })
-
-      const response = await callClaude(message, systemPrompt, set.worktreePath || undefined)
-
-      if (signal.aborted) return []
-
-      await createMessage(
-        projectId, roomId, set.id, set.name, 'leader',
-        { content: response.content },
-        { tokenUsage: response.tokenUsage, setColor: set.color },
-      )
-
-      await updateSetStatus(projectId, set.id, 'idle')
-      return [{ set, content: response.content }]
-    } catch (err) {
-      if (signal.aborted) return []
-      console.error(`[Orchestrator] Error from "${set.name}":`, err)
-      await updateSetStatus(projectId, set.id, 'error')
-      await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-        content: `⚠️ ${set.name} 리더의 응답 중 오류가 발생했습니다: ${(err as Error).message}`,
-      })
-      return []
-    }
-  }
-
-  /**
-   * 여러 리더에게 병렬 응답 요청
-   */
-  private async askLeadersParallel(
+  private async askAllTeams(
     targetSets: AgentSet[],
     projectId: string,
     roomId: string,
@@ -289,15 +170,14 @@ export class CouncilOrchestrator {
     allSets: AgentSet[],
     recentMessages: Array<{ sender: string; content: string }>,
     signal: AbortSignal,
+    mustRespond: boolean,
   ): Promise<Array<{ set: AgentSet; content: string }>> {
     if (signal.aborted) return []
 
-    // 모든 대상 팀 상태를 working으로
     await Promise.all(
       targetSets.map((set) => updateSetStatus(projectId, set.id, 'working')),
     )
 
-    // 병렬 호출
     const results = await Promise.allSettled(
       targetSets.map(async (set) => {
         if (signal.aborted) throw new Error('Aborted')
@@ -310,11 +190,19 @@ export class CouncilOrchestrator {
           otherLeaders: allSets.filter((s) => s.id !== set.id).map((s) => ({ name: s.name, role: s.role })),
           recentMessages,
           isLeadSet: allSets.length > 0 && allSets[0]!.id === set.id,
+          mustRespond,
         })
 
         const response = await callClaude(message, systemPrompt, set.worktreePath || undefined)
 
         if (signal.aborted) throw new Error('Aborted')
+
+        // [PASS] 응답이면 메시지를 저장하지 않음
+        const isPassed = PASS_MARKERS.some((m) => response.content.trim().startsWith(m))
+        if (isPassed) {
+          await updateSetStatus(projectId, set.id, 'idle')
+          return null
+        }
 
         await createMessage(
           projectId, roomId, set.id, set.name, 'leader',
@@ -331,14 +219,17 @@ export class CouncilOrchestrator {
     for (let i = 0; i < results.length; i++) {
       const result = results[i]!
       const set = targetSets[i]!
-      if (result.status === 'fulfilled') {
+      if (result.status === 'fulfilled' && result.value) {
         responses.push(result.value)
-      } else if (!signal.aborted) {
+      } else if (result.status === 'rejected' && !signal.aborted) {
         console.error(`[Orchestrator] Error from "${set.name}":`, result.reason)
         await updateSetStatus(projectId, set.id, 'error')
         await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-          content: `⚠️ ${set.name} 리더의 응답 중 오류가 발생했습니다: ${(result.reason as Error).message}`,
+          content: `⚠️ ${set.name}의 응답 중 오류: ${(result.reason as Error).message}`,
         })
+      } else {
+        // fulfilled with null = PASS
+        await updateSetStatus(projectId, set.id, 'idle')
       }
     }
 
