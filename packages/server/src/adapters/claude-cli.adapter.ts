@@ -1,62 +1,45 @@
-import { spawn } from 'child_process'
+import Anthropic from '@anthropic-ai/sdk'
 
 export interface ClaudeResponse {
   content: string
   tokenUsage?: number
 }
 
+const MODEL = process.env.CLAUDE_MODEL ?? 'claude-haiku-4-5-20251001'
+
+// Singleton SDK client
+let client: Anthropic | null = null
+
+function getClient(): Anthropic {
+  if (!client) {
+    client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+  return client
+}
+
 export async function callClaude(
   message: string,
   systemPrompt: string,
-  workDir?: string,
+  _workDir?: string,
 ): Promise<ClaudeResponse> {
-  const args = [
-    '-p', message,
-    '--output-format', 'json',
-    '--permission-mode', 'bypassPermissions',
-    '--model', process.env.CLAUDE_MODEL ?? 'haiku',
-  ]
+  const anthropic = getClient()
 
-  if (systemPrompt) {
-    args.push('--append-system-prompt', systemPrompt)
-  }
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      proc.kill('SIGTERM')
-      reject(new Error('Claude CLI timeout (120s)'))
-    }, 120_000)
-
-    const proc = spawn('claude', args, {
-      env: { ...process.env },
-      cwd: workDir ?? process.cwd(),
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
-    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
-
-    proc.on('close', (code) => {
-      clearTimeout(timeout)
-      if (code !== 0) {
-        return reject(new Error(`Claude CLI exited with code ${code}: ${stderr}`))
-      }
-      try {
-        const parsed = JSON.parse(stdout)
-        resolve({
-          content: parsed.result ?? parsed.content ?? stdout.trim(),
-          tokenUsage: parsed.usage?.total_tokens,
-        })
-      } catch {
-        resolve({ content: stdout.trim() })
-      }
-    })
-
-    proc.on('error', (err) => {
-      clearTimeout(timeout)
-      reject(err)
-    })
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: message }],
   })
+
+  const content = response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+
+  return {
+    content,
+    tokenUsage: response.usage.input_tokens + response.usage.output_tokens,
+  }
 }
