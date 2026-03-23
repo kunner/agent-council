@@ -94,9 +94,9 @@ export class CouncilOrchestrator {
 
       if (abortController.signal.aborted) return
 
-      // Round 2: 후속 라운드 — 리더 응답에서 다른 팀 멘션 감지
-      const mentionedInResponses = this.detectMentionsInResponses(responses, sets, targetSets)
-      if (mentionedInResponses.length > 0 && !abortController.signal.aborted) {
+      // Round 2: 후속 라운드 — 리더 응답에서 다른 팀 멘션 감지 + 구체적 지시사항 추출
+      const mentionedWithTasks = this.detectMentionsWithTasks(responses, sets, targetSets)
+      if (mentionedWithTasks.length > 0 && !abortController.signal.aborted) {
         // 최신 컨텍스트로 갱신
         const updatedMessages = await listMessages(projectId, roomId, 30)
         const updatedForPrompt = updatedMessages.map((m) => ({
@@ -105,13 +105,18 @@ export class CouncilOrchestrator {
         }))
 
         await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-          content: `💬 ${mentionedInResponses.map((s) => s.name).join(', ')}이(가) 언급되어 추가 응답합니다.`,
+          content: `💬 ${mentionedWithTasks.map((m) => m.set.name).join(', ')}에게 작업이 배분되었습니다.`,
         })
 
-        await this.askLeadersParallel(
-          mentionedInResponses, projectId, roomId,
-          '이전 대화에서 당신의 팀이 언급되었습니다. 관련 의견을 제시해주세요.',
-          project, sets, updatedForPrompt, abortController.signal,
+        // 각 팀에게 개별적으로 구체적 지시사항을 전달
+        await Promise.all(
+          mentionedWithTasks.map((m) =>
+            this.askSingleLeader(
+              m.set, projectId, roomId,
+              `팀장이 당신에게 다음 작업을 지시했습니다:\n\n${m.task}\n\n위 지시사항에 대해 구체적으로 조사하고 답변해주세요.`,
+              project, sets, updatedForPrompt, abortController.signal,
+            ),
+          ),
         )
       }
     } finally {
@@ -150,27 +155,53 @@ export class CouncilOrchestrator {
   }
 
   /**
-   * 리더 응답에서 다른 팀 멘션 감지
+   * 리더 응답에서 다른 팀 멘션 감지 + 해당 팀에 대한 구체적 지시사항 추출
    */
-  private detectMentionsInResponses(
+  private detectMentionsWithTasks(
     responses: Array<{ set: AgentSet; content: string }>,
     allSets: AgentSet[],
     alreadyResponded: AgentSet[],
-  ): AgentSet[] {
+  ): Array<{ set: AgentSet; task: string }> {
     const respondedIds = new Set(alreadyResponded.map((s) => s.id))
-    const mentioned = new Set<string>()
+    const results = new Map<string, { set: AgentSet; task: string }>()
 
     for (const { content } of responses) {
+      const lines = content.split('\n')
+
       for (const set of allSets) {
         if (respondedIds.has(set.id)) continue
+        if (results.has(set.id)) continue
+
         const nameWithoutSuffix = set.name.replace(/팀$/, '')
-        if (content.includes(set.name) || content.includes(nameWithoutSuffix)) {
-          mentioned.add(set.id)
+        const mentionPatterns = [set.name, nameWithoutSuffix]
+        if (set.alias) mentionPatterns.push(set.alias)
+
+        // Find the line(s) where this team is mentioned to extract the specific task
+        const taskLines: string[] = []
+        for (const line of lines) {
+          if (mentionPatterns.some((p) => line.includes(p))) {
+            // Extract the task part after the team name mention
+            let taskText = line
+            for (const p of mentionPatterns) {
+              const idx = taskText.indexOf(p)
+              if (idx !== -1) {
+                taskText = taskText.slice(idx + p.length)
+                break
+              }
+            }
+            // Clean up: remove leading punctuation, commas, etc.
+            taskText = taskText.replace(/^[\s,.:·\-→]+/, '').trim()
+            if (taskText) taskLines.push(taskText)
+          }
+        }
+
+        if (taskLines.length > 0) {
+          results.set(set.id, { set, task: taskLines.join('\n') })
         }
       }
     }
 
-    return allSets.filter((s) => mentioned.has(s.id))
+    return Array.from(results.values())
   }
 
   /**
