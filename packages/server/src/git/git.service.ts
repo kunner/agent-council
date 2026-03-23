@@ -33,14 +33,22 @@ export function initProjectRepo(projectId: string): string {
 /**
  * Clone an existing repo for a project
  */
-export function cloneProjectRepo(projectId: string, repoUrl: string): string {
+export function cloneProjectRepo(projectId: string, repoUrl: string, token?: string): string {
   ensureWorkspaceDir()
   const repoPath = path.join(WORKSPACE_BASE, projectId, 'main')
 
-  if (!fs.existsSync(repoPath)) {
-    execSync(`git clone ${repoUrl} ${repoPath}`)
+  if (fs.existsSync(repoPath)) {
+    // Already exists — remove and re-clone
+    fs.rmSync(repoPath, { recursive: true, force: true })
   }
 
+  // If token provided, inject into URL for private repos
+  let authUrl = repoUrl
+  if (token && repoUrl.startsWith('https://')) {
+    authUrl = repoUrl.replace('https://', `https://${token}@`)
+  }
+
+  execSync(`git clone "${authUrl}" "${repoPath}"`, { timeout: 60_000 })
   return repoPath
 }
 
