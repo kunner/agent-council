@@ -28,6 +28,7 @@ export async function createSet(
     name: dto.name,
     alias,
     role: dto.role,
+    model: dto.model ?? 'sonnet' as const,
     status: 'idle' as const,
     color: colorEntry.hex,
     branch: branchName,

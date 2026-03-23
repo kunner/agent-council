@@ -89,7 +89,11 @@ export class CouncilOrchestrator {
             gitRepoInfo: gitInfo,
           })
 
-          const response = await callClaude(humanMessage, systemPrompt)
+          const response = await callClaude(
+            humanMessage, systemPrompt,
+            set.worktreePath || undefined,
+            set.model ?? 'sonnet',
+          )
 
           if (abort.signal.aborted) break
 

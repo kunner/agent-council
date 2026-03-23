@@ -80,6 +80,7 @@ export interface Message {
 
 // ─── Agent Set ─────────────────────────────────────────────
 export type SetStatus = 'idle' | 'working' | 'waiting' | 'done' | 'error'
+export type ClaudeModel = 'opus' | 'sonnet' | 'haiku'
 
 export interface AgentSet {
   id: string
@@ -87,6 +88,7 @@ export interface AgentSet {
   name: string
   alias?: string
   role: string
+  model: ClaudeModel
   status: SetStatus
   color: string
   branch: string
@@ -172,6 +174,7 @@ export interface CreateSetDto {
   name: string
   alias?: string
   role: string
+  model?: ClaudeModel
   teammates?: number
 }
 
