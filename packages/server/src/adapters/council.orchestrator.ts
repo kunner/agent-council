@@ -63,16 +63,17 @@ export class CouncilOrchestrator {
         content: m.content,
       }))
 
-      const explicitMentions = this.parseMentions(humanMessage, sets)
+      // AI 라우터로 의도 분석
+      const routing = await this.routeMessage(humanMessage, sets)
 
-      if (explicitMentions) {
-        // 명시적 멘션: 해당 팀만 병렬 응답 (반드시)
+      if (routing.mode === 'all' || routing.mode === 'specific') {
+        // 전체 또는 특정 팀: 병렬 응답
         await this.askTeams(
-          explicitMentions, projectId, roomId, humanMessage,
+          routing.targets, projectId, roomId, humanMessage,
           project, sets, recentForPrompt, abort.signal, true, gitInfo,
         )
       } else {
-        // 일반 메시지: 팀장 먼저 → 나머지 자발적
+        // leader 모드: 팀장 먼저 → 나머지 자발적
         const leadSet = sets[0]!
         const otherSets = sets.slice(1)
 
@@ -120,10 +121,11 @@ export class CouncilOrchestrator {
     }
   }
 
-  private parseMentions(message: string, sets: AgentSet[]): AgentSet[] | null {
-    // @all 또는 자연어로 전체를 부르는 표현 감지
-    const allPatterns = ['@all', '@전체', '다들', '모두', '여러분', '전원', '각 팀', '각자']
-    if (allPatterns.some((p) => message.includes(p))) return sets
+  /**
+   * 명시적 @멘션만 파싱 (정확한 패턴 매칭)
+   */
+  private parseExplicitMentions(message: string, sets: AgentSet[]): AgentSet[] | null {
+    if (message.includes('@all') || message.includes('@전체')) return sets
 
     const mentioned: AgentSet[] = []
     for (const set of sets) {
@@ -137,6 +139,65 @@ export class CouncilOrchestrator {
       }
     }
     return mentioned.length > 0 ? mentioned : null
+  }
+
+  /**
+   * AI 라우터: PM 메시지의 의도를 분석하여 누가 응답해야 하는지 판단
+   */
+  private async routeMessage(
+    message: string,
+    sets: AgentSet[],
+  ): Promise<{ targets: AgentSet[]; mode: 'all' | 'specific' | 'leader' }> {
+    // 먼저 명시적 @멘션 체크
+    const explicit = this.parseExplicitMentions(message, sets)
+    if (explicit) {
+      return {
+        targets: explicit,
+        mode: explicit.length === sets.length ? 'all' : 'specific',
+      }
+    }
+
+    // AI에게 의도 판단 위임
+    const teamList = sets.map((s) => `${s.name}(${s.alias ?? ''}: ${s.role})`).join(', ')
+    const routerPrompt = `당신은 메시지 라우터입니다. PM의 메시지를 보고 어떤 팀이 응답해야 하는지 판단하세요.
+
+팀 목록: ${teamList}
+
+규칙:
+- 전체에게 묻는 질문(인사, 의견 요청 등) → ALL
+- 특정 분야에 해당하는 질문 → 해당 팀 이름들 (쉼표 구분)
+- 일반적인 질문이나 판단이 어려운 경우 → LEADER
+
+반드시 다음 형식 중 하나로만 답하세요:
+ALL
+LEADER
+팀이름1,팀이름2`
+
+    try {
+      const response = await callClaude(message, routerPrompt)
+      const answer = response.content.trim()
+
+      if (answer === 'ALL') {
+        return { targets: sets, mode: 'all' }
+      }
+      if (answer === 'LEADER') {
+        return { targets: [sets[0]!], mode: 'leader' }
+      }
+
+      // 특정 팀 이름 파싱
+      const teamNames = answer.split(',').map((n) => n.trim())
+      const matched = sets.filter((s) =>
+        teamNames.some((n) => s.name.includes(n) || n.includes(s.name.replace(/팀$/, ''))),
+      )
+      if (matched.length > 0) {
+        return { targets: matched, mode: 'specific' }
+      }
+    } catch (err) {
+      console.error('[Router] AI routing failed, defaulting to leader:', err)
+    }
+
+    // 폴백: 팀장
+    return { targets: [sets[0]!], mode: 'leader' }
   }
 
   private findMentionedTeams(
