@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { authMiddleware, type AuthRequest } from '../middleware/auth.js'
-import { createMessage, listMessages } from './message.service.js'
+import { createMessage, listMessages, clearMessages } from './message.service.js'
 import { getCouncilOrchestrator } from '../adapters/council.orchestrator.js'
 
 export const messageRouter: Router = Router()
@@ -17,6 +17,36 @@ messageRouter.get(
       const limit = parseInt(req.query.limit as string) || 100
       const messages = await listMessages(projectId, roomId, limit)
       res.json({ messages })
+    } catch (err) {
+      next(err)
+    }
+  },
+)
+
+// Export all messages (for backup/download)
+messageRouter.get(
+  '/:projectId/rooms/:roomId/messages/export',
+  async (req: AuthRequest, res, next) => {
+    try {
+      const projectId = req.params.projectId as string
+      const roomId = req.params.roomId as string
+      const messages = await listMessages(projectId, roomId, 10000)
+      res.json({ messages, total: messages.length })
+    } catch (err) {
+      next(err)
+    }
+  },
+)
+
+// Clear all messages in a room
+messageRouter.delete(
+  '/:projectId/rooms/:roomId/messages',
+  async (req: AuthRequest, res, next) => {
+    try {
+      const projectId = req.params.projectId as string
+      const roomId = req.params.roomId as string
+      await clearMessages(projectId, roomId)
+      res.json({ success: true })
     } catch (err) {
       next(err)
     }

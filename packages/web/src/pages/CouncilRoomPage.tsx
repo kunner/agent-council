@@ -8,6 +8,7 @@ import { MentionPopover } from '../components/chat/MentionPopover'
 import { SetStatusCard } from '../components/sets/SetStatusCard'
 import { SetCreateModal } from '../components/sets/SetCreateModal'
 import { useMention } from '../hooks/useMention'
+import { ClearChatModal } from '../components/chat/ClearChatModal'
 import { RightPanel } from '../components/panels/RightPanel'
 import { useProject } from '../hooks/useProject'
 
@@ -21,6 +22,7 @@ export function CouncilRoomPage() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showSetModal, setShowSetModal] = useState(false)
+  const [showClearModal, setShowClearModal] = useState(false)
   const [showLeftPanel, setShowLeftPanel] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -70,6 +72,19 @@ export function CouncilRoomPage() {
 
   return (
     <div className="flex h-screen">
+      {showClearModal && (
+        <ClearChatModal
+          messages={messages}
+          onClose={() => setShowClearModal(false)}
+          onClear={async () => {
+            await fetchApi(`/api/projects/${projectId}/rooms/main/messages`, { method: 'DELETE' })
+          }}
+          onExportAll={async () => {
+            const data = await fetchApi(`/api/projects/${projectId}/rooms/main/messages/export`)
+            return data.messages
+          }}
+        />
+      )}
       {showSetModal && (
         <SetCreateModal
           onClose={() => setShowSetModal(false)}
@@ -126,8 +141,15 @@ export function CouncilRoomPage() {
             <Link to="/" className="text-sm text-gray-500 hover:text-blue-400 lg:hidden">←</Link>
             <h2 className="font-semibold">Council Room</h2>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">{sets.length}개 팀</span>
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white transition"
+              title="대화 정리"
+            >
+              🗑
+            </button>
             <Link to={`/p/${projectId}/settings`} className="rounded p-1 text-gray-500 hover:bg-gray-800 hover:text-white transition" title="프로젝트 설정">
               ⚙
             </Link>

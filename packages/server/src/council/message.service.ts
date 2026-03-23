@@ -52,3 +52,25 @@ export async function listMessages(
 
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Message)
 }
+
+export async function clearMessages(
+  projectId: string,
+  roomId: string,
+): Promise<number> {
+  const db = getFirestore()
+  const ref = db.collection(`projects/${projectId}/rooms/${roomId}/messages`)
+  let total = 0
+
+  // Firestore batch limit is 500 — delete in chunks
+  while (true) {
+    const snapshot = await ref.limit(500).get()
+    if (snapshot.empty) break
+
+    const batch = db.batch()
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref))
+    await batch.commit()
+    total += snapshot.size
+  }
+
+  return total
+}
