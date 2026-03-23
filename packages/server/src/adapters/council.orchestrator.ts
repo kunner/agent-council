@@ -121,29 +121,22 @@ export class CouncilOrchestrator {
 
         if (abortController.signal.aborted) return
 
-        // Round 3: 팀장이 팀원 답변을 검토/정리/피드백
+        // Round 3: 팀장이 팀원 답변을 검토/정리 (실제 작업 결과가 있을 때만)
+        const round2Flat = round2Responses.flat()
+        const hasSubstantiveWork = round2Flat.some((r) =>
+          r.content.length > 100 // 실질적인 내용이 있는 답변만
+        )
         const leadSet = sets[0]
-        if (leadSet && round2Responses.flat().length > 0) {
+        if (leadSet && hasSubstantiveWork && !abortController.signal.aborted) {
           const round3Messages = await listMessages(projectId, roomId, 30)
           const round3ForPrompt = round3Messages.map((m) => ({
             sender: m.senderName,
             content: m.content,
           }))
 
-          await createMessage(projectId, roomId, 'system', '시스템', 'system', {
-            content: '📋 팀장이 팀원 답변을 검토합니다.',
-          })
-
           await this.askSingleLeader(
             leadSet, projectId, roomId,
-            `각 팀이 당신이 지시한 작업에 대해 답변했습니다. 팀장으로서 다음을 수행해주세요:
-
-1. 각 팀의 답변을 간단히 평가해주세요 (잘한 점, 부족한 점)
-2. 답변들을 종합하여 PM에게 핵심 요약을 제시해주세요
-3. 추가 조사나 수정이 필요한 팀이 있으면 구체적으로 지시해주세요
-4. 최종적으로 PM에게 의사결정을 위한 선택지를 제시해주세요
-
-간결하게 정리해주세요.`,
+            `각 팀이 답변했습니다. 팀장으로서 짧게 정리해주세요. 보고서 형식이 아니라 자연스러운 대화체로, 핵심만 요약하고 PM에게 다음 단계를 제안하세요.`,
             project, sets, round3ForPrompt, abortController.signal,
           )
         }

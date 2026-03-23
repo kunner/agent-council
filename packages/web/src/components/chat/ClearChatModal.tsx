@@ -7,12 +7,15 @@ interface Props {
   onExportAll: () => Promise<Message[]>
 }
 
-function formatTime(timestamp: Message['timestamp']): string {
+function formatTime(timestamp: unknown): string {
   if (!timestamp) return ''
-  const date = 'seconds' in timestamp
-    ? new Date(timestamp.seconds * 1000)
-    : new Date(timestamp as unknown as number)
-  return date.toLocaleString('ko-KR')
+  const ts = timestamp as Record<string, unknown>
+  // Firestore Timestamp can be {seconds, nanoseconds} or {_seconds, _nanoseconds}
+  const secs = (ts.seconds ?? ts._seconds) as number | undefined
+  if (secs) return new Date(secs * 1000).toLocaleString('ko-KR')
+  // Fallback: try as Date string or number
+  const d = new Date(timestamp as string | number)
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('ko-KR')
 }
 
 function generateHtml(messages: Message[]): string {
