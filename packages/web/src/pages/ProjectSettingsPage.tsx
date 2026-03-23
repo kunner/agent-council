@@ -326,6 +326,49 @@ export function ProjectSettingsPage() {
         )}
       </div>
 
+      {/* 세션 관리 */}
+      <div className="mt-8 border-t border-gray-800 pt-6">
+        <h2 className="text-lg font-semibold">세션 관리</h2>
+        <p className="mt-1 text-sm text-gray-400">AI 팀의 대화 세션을 관리합니다.</p>
+
+        <div className="mt-4 space-y-3">
+          <button
+            onClick={async () => {
+              try {
+                await fetchApi(`/api/projects/${projectId}/sets/init-leader`, { method: 'POST' })
+                setMessage('팀장이 초기화되었습니다.')
+                setTimeout(() => setMessage(''), 3000)
+              } catch (err) {
+                setMessage('초기화 실패: ' + (err as Error).message)
+              }
+            }}
+            className="w-full rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-blue-500 hover:text-blue-400 transition"
+          >
+            🎯 팀장 초기화 (기존 프로젝트용)
+          </button>
+
+          <button
+            onClick={async () => {
+              if (!confirm('모든 팀의 세션을 리셋합니다. 대화 컨텍스트가 초기화됩니다.')) return
+              try {
+                await fetchApi(`/api/projects/${projectId}/sets/reset-all-sessions`, { method: 'POST' })
+                setMessage('모든 세션이 리셋되었습니다.')
+                setTimeout(() => setMessage(''), 3000)
+              } catch (err) {
+                setMessage('리셋 실패: ' + (err as Error).message)
+              }
+            }}
+            className="w-full rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:border-yellow-500 hover:text-yellow-400 transition"
+          >
+            🔄 전체 세션 리셋 (컨텍스트 초기화)
+          </button>
+
+          <p className="text-xs text-gray-600">
+            세션 리셋: 대화 히스토리는 유지되지만, AI의 내부 컨텍스트가 초기화됩니다. 대화가 꼬였을 때 사용하세요.
+          </p>
+        </div>
+      </div>
+
       {/* 위험 구역 */}
       <div className="mt-8 border-t border-red-900/30 pt-6">
         <h2 className="text-lg font-semibold text-red-400">위험 구역</h2>
