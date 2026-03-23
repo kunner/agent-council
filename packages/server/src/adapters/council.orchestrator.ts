@@ -121,7 +121,9 @@ export class CouncilOrchestrator {
   }
 
   private parseMentions(message: string, sets: AgentSet[]): AgentSet[] | null {
-    if (message.includes('@all') || message.includes('@전체')) return sets
+    // @all 또는 자연어로 전체를 부르는 표현 감지
+    const allPatterns = ['@all', '@전체', '다들', '모두', '여러분', '전원', '각 팀', '각자']
+    if (allPatterns.some((p) => message.includes(p))) return sets
 
     const mentioned: AgentSet[] = []
     for (const set of sets) {
