@@ -109,15 +109,44 @@ export class CouncilOrchestrator {
         })
 
         // 각 팀에게 개별적으로 구체적 지시사항을 전달
-        await Promise.all(
+        const round2Responses = await Promise.all(
           mentionedWithTasks.map((m) =>
             this.askSingleLeader(
               m.set, projectId, roomId,
-              `팀장이 당신에게 다음 작업을 지시했습니다:\n\n${m.task}\n\n위 지시사항에 대해 구체적으로 조사하고 답변해주세요.`,
+              `팀장이 당신에게 다음 작업을 지시했습니다:\n\n${m.task}\n\n위 지시사항에만 집중해서 구체적으로 답변해주세요. 다른 팀의 업무에 대해서는 언급하지 마세요.`,
               project, sets, updatedForPrompt, abortController.signal,
             ),
           ),
         )
+
+        if (abortController.signal.aborted) return
+
+        // Round 3: 팀장이 팀원 답변을 검토/정리/피드백
+        const leadSet = sets[0]
+        if (leadSet && round2Responses.flat().length > 0) {
+          const round3Messages = await listMessages(projectId, roomId, 30)
+          const round3ForPrompt = round3Messages.map((m) => ({
+            sender: m.senderName,
+            content: m.content,
+          }))
+
+          await createMessage(projectId, roomId, 'system', '시스템', 'system', {
+            content: '📋 팀장이 팀원 답변을 검토합니다.',
+          })
+
+          await this.askSingleLeader(
+            leadSet, projectId, roomId,
+            `각 팀이 당신이 지시한 작업에 대해 답변했습니다. 팀장으로서 다음을 수행해주세요:
+
+1. 각 팀의 답변을 간단히 평가해주세요 (잘한 점, 부족한 점)
+2. 답변들을 종합하여 PM에게 핵심 요약을 제시해주세요
+3. 추가 조사나 수정이 필요한 팀이 있으면 구체적으로 지시해주세요
+4. 최종적으로 PM에게 의사결정을 위한 선택지를 제시해주세요
+
+간결하게 정리해주세요.`,
+            project, sets, round3ForPrompt, abortController.signal,
+          )
+        }
       }
     } finally {
       this.activeTasks.delete(taskKey)
