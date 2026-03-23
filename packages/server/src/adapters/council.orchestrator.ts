@@ -134,16 +134,21 @@ export class CouncilOrchestrator {
   ): Promise<{ content: string } | null> {
     if (signal.aborted) return null
 
-    // Get latest conversation context
-    const recentMessages = await listMessages(projectId, roomId, 30)
-    const recentForPrompt = recentMessages.map((m) => ({
-      sender: m.senderName,
-      content: m.content,
-    }))
-
     await updateSetStatus(projectId, set.id, 'working')
 
     try {
+      // Get or create session
+      const existingSessionId = await getSessionId(projectId, set.id)
+
+      // 세션 재개 시: 대화 히스토리가 이미 세션에 있으므로 최근 메시지 주입 불필요
+      // 새 세션 시: 컨텍스트가 없으므로 최근 메시지 포함
+      const recentForPrompt = existingSessionId
+        ? [] // 세션에 이미 있음
+        : (await listMessages(projectId, roomId, 30)).map((m) => ({
+            sender: m.senderName,
+            content: m.content,
+          }))
+
       const systemPrompt = buildLeaderSystemPrompt({
         setName: set.name,
         role: set.role,
@@ -155,9 +160,6 @@ export class CouncilOrchestrator {
         mustRespond: set.isLeader === true,
         gitRepoInfo: gitInfo,
       })
-
-      // Get or create session
-      const existingSessionId = await getSessionId(projectId, set.id)
 
       const response = await sendToSession({
         message,
