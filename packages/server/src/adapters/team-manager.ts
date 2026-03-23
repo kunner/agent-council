@@ -106,7 +106,7 @@ export async function createLeaderSet(
   const set = await createSet(projectId, {
     name: '팀장',
     role: '프로젝트 총괄 코디네이터. 대화를 주도하고, 필요한 전문가를 불러오고, 작업을 조율합니다.',
-    model: 'sonnet',
+    model: 'opus',
     alias: 'leader',
   })
 

@@ -23,6 +23,10 @@ export async function sendToSession(params: {
 }): Promise<ClaudeResponse> {
   const model = MODEL_MAP[params.model ?? 'sonnet']
 
+  // API 키를 제외한 env를 전달 → Max 플랜 OAuth 인증 사용 (추가 비용 없음)
+  const sdkEnv = { ...process.env }
+  delete sdkEnv.ANTHROPIC_API_KEY
+
   const result = query({
     prompt: params.message,
     options: {
@@ -34,6 +38,7 @@ export async function sendToSession(params: {
       allowDangerouslySkipPermissions: true,
       maxTurns: params.maxTurns ?? 3,
       persistSession: true,
+      env: sdkEnv,
     },
   })
 

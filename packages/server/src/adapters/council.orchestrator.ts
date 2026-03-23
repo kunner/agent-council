@@ -165,7 +165,7 @@ export class CouncilOrchestrator {
         cwd: set.worktreePath || undefined,
         model: set.model ?? 'sonnet',
         sessionId: existingSessionId,
-        maxTurns: set.isLeader ? 3 : 2,
+        maxTurns: set.isLeader ? 5 : 3,
       })
 
       if (signal.aborted) return null
