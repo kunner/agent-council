@@ -93,6 +93,9 @@ export interface AgentSet {
   color: string
   branch: string
   worktreePath: string
+  sessionId?: string
+  isActive?: boolean
+  isLeader?: boolean
   teammates: number
   createdAt: Timestamp
 }

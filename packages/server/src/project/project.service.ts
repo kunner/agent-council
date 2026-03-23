@@ -2,6 +2,7 @@ import { getFirestore } from '../firebase/admin.js'
 import type { Project, CreateProjectDto, Room } from '@agent-council/shared'
 import { FieldValue } from 'firebase-admin/firestore'
 import { initProjectRepo, cloneProjectRepo } from '../git/git.service.js'
+import { createLeaderSet } from '../adapters/team-manager.js'
 
 export async function createProject(
   ownerId: string,
@@ -45,6 +46,13 @@ export async function createProject(
     }
   } catch (err) {
     console.error('[Git] Failed to initialize repo:', err)
+  }
+
+  // Auto-create leader
+  try {
+    await createLeaderSet(projectRef.id, 'main')
+  } catch (err) {
+    console.error('[Project] Failed to create leader:', err)
   }
 
   const doc = await projectRef.get()

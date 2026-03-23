@@ -112,9 +112,10 @@ export function CouncilRoomPage() {
               </h3>
               <button
                 onClick={() => setShowSetModal(true)}
-                className="rounded bg-blue-600 px-2 py-0.5 text-xs font-medium hover:bg-blue-700 transition"
+                className="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-400 hover:bg-gray-600 transition"
+                title="수동 팀원 추가"
               >
-                + 추가
+                +
               </button>
             </div>
             <div className="mt-2 space-y-2">

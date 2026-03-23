@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@agent-council/shared": "workspace:*",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@anthropic-ai/sdk": "^0.80.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
