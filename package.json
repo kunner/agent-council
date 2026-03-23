@@ -1,0 +1,24 @@
+{
+  "name": "agent-council",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-team AI agent orchestration system",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"pnpm --filter @agent-council/server dev\" \"pnpm --filter @agent-council/web dev\"",
+    "build": "pnpm --filter @agent-council/shared build && pnpm --filter @agent-council/server build && pnpm --filter @agent-council/web build",
+    "build:server": "pnpm --filter @agent-council/server build",
+    "build:web": "pnpm --filter @agent-council/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean && rimraf node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "rimraf": "^6.0.0",
+    "typescript": "^5.5.0"
+  }
+}

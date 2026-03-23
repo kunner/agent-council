@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+.turbo/
+coverage/
+packages/server/.env
+packages/web/.env.local
+packages/web/.env.production
+/workspace/
