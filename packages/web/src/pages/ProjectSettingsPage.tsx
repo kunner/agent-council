@@ -16,10 +16,11 @@ export function ProjectSettingsPage() {
   const [repoUrl, setRepoUrl] = useState('')
   const [gitToken, setGitToken] = useState('')
   const [gitStatus, setGitStatus] = useState<{
-    branches: Array<{ name: string }>
+    branches: Array<{ name: string; isRemote?: boolean; isSet?: boolean }>
     mainCommits: number
     config?: { type: string; repoUrl?: string; repoName?: string; isPrivate?: boolean; connectedAt?: string } | null
   } | null>(null)
+  const [cloning, setCloning] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -83,8 +84,9 @@ export function ProjectSettingsPage() {
   }
 
   const handleCloneGit = async () => {
-    if (!repoUrl.trim()) return
-    setMessage('Git 저장소 연결 중...')
+    if (!repoUrl.trim() || cloning) return
+    setCloning(true)
+    setMessage('Git 저장소 연결 중... (대형 저장소는 시간이 걸릴 수 있습니다)')
     try {
       await fetchApi(`/api/projects/${projectId}/git/clone`, {
         method: 'POST',
@@ -97,6 +99,8 @@ export function ProjectSettingsPage() {
       setTimeout(() => setMessage(''), 3000)
     } catch (err) {
       setMessage('Git 연결 실패: ' + (err as Error).message)
+    } finally {
+      setCloning(false)
     }
   }
 
@@ -237,11 +241,13 @@ export function ProjectSettingsPage() {
               </div>
 
               {gitStatus!.branches.length > 0 && (
-                <div className="mt-3 space-y-1 border-t border-green-900/30 pt-3">
+                <div className="mt-3 space-y-1.5 border-t border-green-900/30 pt-3">
                   {gitStatus!.branches.map((b) => (
-                    <div key={b.name} className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className="text-green-500">●</span>
-                      <span>{b.name}</span>
+                    <div key={b.name} className="flex items-center gap-2 text-xs">
+                      <span className={b.isRemote ? 'text-blue-400' : b.isSet ? 'text-purple-400' : 'text-green-500'}>●</span>
+                      <span className="text-gray-300">{b.name}</span>
+                      {b.isRemote && <span className="rounded bg-blue-900/30 px-1 py-0.5 text-[10px] text-blue-400">remote</span>}
+                      {b.isSet && <span className="rounded bg-purple-900/30 px-1 py-0.5 text-[10px] text-purple-400">팀</span>}
                     </div>
                   ))}
                 </div>
@@ -297,10 +303,10 @@ export function ProjectSettingsPage() {
               </div>
               <button
                 onClick={handleCloneGit}
-                disabled={!repoUrl.trim()}
+                disabled={!repoUrl.trim() || cloning}
                 className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition"
               >
-                저장소 연결 (Clone)
+                {cloning ? '연결 중...' : '저장소 연결 (Clone)'}
               </button>
 
               <div className="flex items-center gap-3">

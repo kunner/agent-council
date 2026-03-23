@@ -102,7 +102,7 @@ export function removeProjectRepo(projectId: string): void {
  * Get git status for a project
  */
 export function getGitStatus(projectId: string): {
-  branches: Array<{ name: string; ahead: number }>
+  branches: Array<{ name: string; isRemote: boolean; isSet: boolean }>
   mainCommits: number
 } {
   const mainRepoPath = path.join(WORKSPACE_BASE, projectId, 'main')
@@ -119,8 +119,20 @@ export function getGitStatus(projectId: string): {
     const branches = branchOutput
       .split('\n')
       .map((b) => b.trim().replace('* ', ''))
-      .filter((b) => b && !b.startsWith('remotes/'))
-      .map((name) => ({ name, ahead: 0 }))
+      .filter((b) => b && !b.includes('HEAD'))
+      .map((name) => {
+        const isRemote = name.startsWith('remotes/')
+        const displayName = isRemote ? name.replace('remotes/origin/', '') : name
+        const isSet = name.startsWith('set-')
+        return { name: displayName, isRemote, isSet }
+      })
+      // Deduplicate: if a local and remote branch have the same display name, keep local
+      .filter((b, i, arr) => {
+        if (b.isRemote) {
+          return !arr.some((other) => !other.isRemote && other.name === b.name)
+        }
+        return true
+      })
 
     return { branches, mainCommits }
   } catch {
