@@ -25,6 +25,7 @@ export function CouncilRoomPage() {
   const [showClearModal, setShowClearModal] = useState(false)
   const [showLeftPanel, setShowLeftPanel] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -36,6 +37,7 @@ export function CouncilRoomPage() {
     const content = input.trim()
     setInput('')
     setSending(true)
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     try {
       await fetchApi(`/api/projects/${projectId}/rooms/main/messages`, {
@@ -217,17 +219,23 @@ export function CouncilRoomPage() {
               position={{ bottom: 60, left: 16 }}
             />
           )}
-          <div className="flex gap-2">
+          <div className="flex items-end gap-2">
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => {
                 setInput(e.target.value)
                 handleInputChange(e.target.value, e.target.selectionStart ?? 0)
+                // Auto-resize
+                const el = e.target
+                el.style.height = 'auto'
+                el.style.height = Math.min(el.scrollHeight, 200) + 'px'
               }}
               onKeyDown={handleKeyDown}
-              placeholder="메시지를 입력하세요... (Enter로 전송)"
+              placeholder="메시지를 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
               rows={1}
-              className="flex-1 resize-none rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 focus:border-blue-500 focus:outline-none"
+              className="flex-1 resize-none rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 focus:border-blue-500 focus:outline-none overflow-y-auto"
+              style={{ maxHeight: '200px' }}
             />
             <button
               onClick={handleSend}
