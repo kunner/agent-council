@@ -13,7 +13,7 @@ import { useProject } from '../hooks/useProject'
 
 export function CouncilRoomPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { messages, loading } = useMessages(projectId)
+  const { messages, loading, hasMore, loadingMore, loadMore } = useMessages(projectId)
   const { sets } = useSets(projectId)
   const { project } = useProject(projectId)
   const { fetchApi } = useApi()
@@ -144,6 +144,17 @@ export function CouncilRoomPage() {
             </div>
           ) : (
             <div className="space-y-3">
+              {hasMore && (
+                <div className="text-center">
+                  <button
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="rounded-lg border border-gray-700 px-4 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-white disabled:opacity-50 transition"
+                  >
+                    {loadingMore ? '불러오는 중...' : '↑ 이전 메시지 불러오기'}
+                  </button>
+                </div>
+              )}
               {messages.map((msg) => (
                 <MessageItem key={msg.id} message={msg} />
               ))}

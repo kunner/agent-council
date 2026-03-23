@@ -14,7 +14,7 @@ export async function callClaude(
     '-p', message,
     '--output-format', 'json',
     '--permission-mode', 'bypassPermissions',
-    '--model', 'sonnet',
+    '--model', process.env.CLAUDE_MODEL ?? 'haiku',
   ]
 
   if (systemPrompt) {
